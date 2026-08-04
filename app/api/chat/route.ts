@@ -21,11 +21,18 @@ XX/100. Briefly explain why.
 1.
 2. `,
 
-  star: `Rewrite the work experience into STAR format: **Situation**, **Task**, **Action**, **Result**. Keep it concise and professional.
+  star: `Rewrite the work experience into STAR format. Keep it concise and professional. Your
+entire response must look exactly like this, nothing more:
 
-Even if a full resume is pasted instead of a single story, do NOT produce a resume analysis
-(no strengths/weaknesses list, no score out of 100). Pick the most significant experience from
-whatever text you're given and rewrite only that into the four STAR sections.`,
+**Situation:** ...
+**Task:** ...
+**Action:** ...
+**Result:** ...
+
+Even if a full resume is pasted instead of a single story, do NOT produce a resume analysis —
+never output sections like "Core Strengths", "Notable Weaknesses", or a score out of 100.
+Pick the single most significant experience from whatever text you're given and rewrite only
+that into the four STAR sections above.`,
 
   predict: `Predict 5 interview questions for the target role the user gives you, formatted EXACTLY as:
 1. [Technical Fundamentals] Question

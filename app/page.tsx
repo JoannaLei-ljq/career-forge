@@ -76,11 +76,26 @@ const RESUME_ALREADY_GIVEN_NUDGE_TEXT =
 
 // Weak/free models tend to see a resume block and default to a resume-analysis
 // writeup regardless of system-prompt instructions. Repeating the format
-// constraint right next to the resume in the user turn (not just the system
-// prompt) meaningfully improves compliance for these modes.
-const ATTACHMENT_FORMAT_REMINDER: Partial<Record<Mode, string>> = {
-  predict:
-    'Use the resume below only as context for tailoring. Do not analyze it or output strengths/weaknesses/a score — respond with only the 5 numbered interview questions.',
+// constraint — including a concrete example of the expected output — right
+// next to the resume/story in the user turn (not just the system prompt)
+// meaningfully improves compliance for these modes.
+const FORMAT_REMINDERS: Partial<Record<Mode, string>> = {
+  star: `Rewrite ONLY the story/experience below into STAR format. Do not analyze it, do not list
+strengths/weaknesses, do not give a score out of 100. Your entire response must look like:
+
+**Situation:** ...
+**Task:** ...
+**Action:** ...
+**Result:** ...`,
+  predict: `Use the resume below only as context for tailoring — do not analyze it, do not list
+strengths/weaknesses, do not give a score. Your entire response must be exactly 5 numbered
+questions in this format and nothing else:
+
+1. [Technical Fundamentals] ...
+2. [Project Experience] ...
+3. [System Design] ...
+4. [Behavioral] ...
+5. [Open-Ended] ...`,
   simulate:
     'Use the resume below only as context for tailoring. Do not analyze it or output strengths/weaknesses/a score — respond with a single interview question to start the mock interview.',
 };
@@ -129,14 +144,25 @@ export default function Home() {
   const isLoading = status === 'submitted' || status === 'streaming';
   const activeTool = TOOLS.find((t) => t.id === mode)!;
 
+  const buildMessageText = () => {
+    const trimmedInput = inputText.trim();
+
+    if (mode === 'star') {
+      return `${FORMAT_REMINDERS.star}\n\nStory/experience:\n${trimmedInput}`;
+    }
+
+    if (RESUME_ATTACHMENT_MODES.includes(mode) && resumeText.trim()) {
+      return `Target role: ${trimmedInput}\n\n${FORMAT_REMINDERS[mode] ?? ''}\n\nCandidate's resume:\n${resumeText.trim()}`;
+    }
+
+    return trimmedInput;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isLoading) return;
     hasNudgedRef.current = false;
-    const text =
-      RESUME_ATTACHMENT_MODES.includes(mode) && resumeText.trim()
-        ? `Target role: ${inputText.trim()}\n\n${ATTACHMENT_FORMAT_REMINDER[mode] ?? ''}\n\nCandidate's resume:\n${resumeText.trim()}`
-        : inputText.trim();
+    const text = buildMessageText();
     sendMessage({ text });
     setInputText('');
   };
