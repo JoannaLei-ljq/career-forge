@@ -13,8 +13,8 @@ job description.
 
 **Live demo:** [career-forge-ochre.vercel.app](https://career-forge-ochre.vercel.app/)
 
-<!-- Add a screenshot or short GIF here once you have one, e.g.: -->
-<!-- ![Career Forge screenshot](./docs/screenshot.png) -->
+![Career Forge default view](./docs/screenshot.png)
+![Career Forge STAR Rewrite in action](./docs/screenshot-star.png)
 
 ## Table of contents
 
