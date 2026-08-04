@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Interview Toolkit
 
-## Getting Started
+An AI-powered interview prep app with four tools in one interface:
 
-First, run the development server:
+- **Resume Analysis** — strengths, weaknesses, a role-fit score, and key areas to prepare
+- **STAR Rewrite** — turns a work story into Situation / Task / Action / Result format
+- **Question Prediction** — 5 likely interview questions for a target role, by category
+- **Mock Interview** — a multi-turn simulated interviewer that follows up on your answers
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Responses stream in token-by-token, support voice input via the browser's Web Speech
+API, and render as formatted Markdown.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [Next.js](https://nextjs.org) (App Router) + React + TypeScript
+- [Vercel AI SDK](https://sdk.vercel.ai) (`ai`, `@ai-sdk/react`) for streaming chat, via the
+  [OpenRouter provider](https://openrouter.ai) — model is configurable, so you can point it
+  at any OpenRouter-hosted model
+- [Tailwind CSS](https://tailwindcss.com) v4 + [shadcn/ui](https://ui.shadcn.com) components
+- [lucide-react](https://lucide.dev) icons
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup
 
-## Learn More
+1. Install dependencies:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   pnpm install
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. Copy `.env.example` to `.env.local` and fill in the values:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```bash
+   cp .env.example .env.local
+   ```
 
-## Deploy on Vercel
+   | Variable             | Description                                                                 |
+   | -------------------- | ---------------------------------------------------------------------------- |
+   | `OPENROUTER_API_KEY` | API key from [openrouter.ai](https://openrouter.ai/keys)                     |
+   | `OPENROUTER_MODEL`   | Model ID to use, e.g. `openai/gpt-4o-mini` (see [openrouter.ai/models](https://openrouter.ai/models)) |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. Run the dev server:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   ```bash
+   pnpm dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000).
+
+## Project structure
+
+- `app/page.tsx` — main UI: tool switcher, input panel, streaming response panel
+- `app/api/chat/route.ts` — API route that streams a mode-specific system prompt + user
+  input through OpenRouter
+- `components/ui/` — shadcn primitives (Button, Card, Tabs, Textarea, etc.)
+
+See [`UPGRADE_PLAN.md`](./UPGRADE_PLAN.md) for the project roadmap and what's implemented
+so far.

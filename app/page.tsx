@@ -25,6 +25,15 @@ import { Textarea } from '@/components/ui/textarea';
 
 type Mode = 'analyze' | 'star' | 'predict' | 'simulate';
 
+interface SpeechRecognitionResultEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
 const TOOLS: { id: Mode; label: string; desc: string; icon: typeof FileText }[] = [
   { id: 'analyze', label: 'Resume Analysis', desc: 'Strengths & weaknesses', icon: FileText },
   { id: 'star', label: 'STAR Rewrite', desc: 'Rewrite experience', icon: Star },
@@ -81,7 +90,7 @@ export default function Home() {
       return;
     }
 
-    // @ts-ignore
+    // @ts-expect-error - SpeechRecognition is not yet in the standard DOM lib types
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
 
@@ -93,7 +102,7 @@ export default function Home() {
       setIsListening(true);
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionResultEvent) => {
       let finalTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         finalTranscript += event.results[i][0].transcript;
@@ -104,7 +113,7 @@ export default function Home() {
       timeoutIdRef.current = setTimeout(() => recognition.stop(), 3000);
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech error:', event.error);
       setIsListening(false);
       if (event.error !== 'no-speech') {
