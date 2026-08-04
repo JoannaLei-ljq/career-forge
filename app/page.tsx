@@ -18,6 +18,7 @@ import {
   Trash2,
   Upload,
   Users,
+  X,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -48,13 +49,41 @@ const TOOLS: { id: Mode; label: string; desc: string; icon: typeof FileText }[] 
 const PLACEHOLDERS: Record<Mode, string> = {
   analyze: 'Paste your full resume, or upload a file below...',
   star: 'Paste a work experience story, or upload a resume below...',
-  predict: 'Enter target role, e.g. Frontend Engineer',
-  simulate: 'Enter the role you want to mock interview for...',
+  predict: 'Enter target role (e.g. Frontend Engineer) — optionally add or upload your resume below for more tailored questions...',
+  simulate: 'Enter the role you want to mock interview for — optionally add or upload your resume below for a more tailored interview...',
 };
 
-// Uploading a resume file only makes sense where the input is resume/experience
-// text, not a one-line role title.
-const UPLOAD_MODES: Mode[] = ['analyze', 'star'];
+// All four tools accept a resume — required for Resume Analysis/STAR, where
+// uploading fills the main input box directly (that box IS the resume).
+const UPLOAD_MODES: Mode[] = ['analyze', 'star', 'predict', 'simulate'];
+
+// Question Prediction and Mock Interview treat the main input as a role/title
+// instead, so an uploaded resume there is kept as a separate attachment
+// (shown as a chip) instead of overwriting whatever role the user typed.
+const RESUME_ATTACHMENT_MODES: Mode[] = ['predict', 'simulate'];
+
+function looksLikeResumeRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (!lower.includes('resume')) return false;
+  return /provide|paste|share|haven't|have not|upload|attach|need (your|a)/.test(lower);
+}
+
+const RESUME_NUDGE_TEXT =
+  "I don't have a resume to share. Please proceed using only the role I already gave you — do not ask again, generate the requested output now.";
+
+const RESUME_ALREADY_GIVEN_NUDGE_TEXT =
+  "I already included my resume above — please use it and proceed with the requested output now, don't ask again.";
+
+// Weak/free models tend to see a resume block and default to a resume-analysis
+// writeup regardless of system-prompt instructions. Repeating the format
+// constraint right next to the resume in the user turn (not just the system
+// prompt) meaningfully improves compliance for these modes.
+const ATTACHMENT_FORMAT_REMINDER: Partial<Record<Mode, string>> = {
+  predict:
+    'Use the resume below only as context for tailoring. Do not analyze it or output strengths/weaknesses/a score — respond with only the 5 numbered interview questions.',
+  simulate:
+    'Use the resume below only as context for tailoring. Do not analyze it or output strengths/weaknesses/a score — respond with a single interview question to start the mock interview.',
+};
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>('analyze');
@@ -64,8 +93,11 @@ export default function Home() {
   const [showJobDescription, setShowJobDescription] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [resumeText, setResumeText] = useState('');
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasNudgedRef = useRef(false);
 
   const transport = useMemo(
     () => new DefaultChatTransport({ api: '/api/chat', body: { mode, jobDescription } }),
@@ -74,6 +106,24 @@ export default function Home() {
 
   const { messages, sendMessage, status, error, setMessages, clearError } = useChat({
     transport,
+    onFinish: ({ message }) => {
+      if (
+        RESUME_ATTACHMENT_MODES.includes(mode) &&
+        !hasNudgedRef.current &&
+        message.role === 'assistant'
+      ) {
+        const text = message.parts
+          .filter((p) => p.type === 'text')
+          .map((p) => p.text)
+          .join('');
+        if (looksLikeResumeRequest(text)) {
+          hasNudgedRef.current = true;
+          sendMessage({
+            text: resumeText.trim() ? RESUME_ALREADY_GIVEN_NUDGE_TEXT : RESUME_NUDGE_TEXT,
+          });
+        }
+      }
+    },
   });
 
   const isLoading = status === 'submitted' || status === 'streaming';
@@ -82,19 +132,33 @@ export default function Home() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isLoading) return;
-    sendMessage({ text: inputText.trim() });
+    hasNudgedRef.current = false;
+    const text =
+      RESUME_ATTACHMENT_MODES.includes(mode) && resumeText.trim()
+        ? `Target role: ${inputText.trim()}\n\n${ATTACHMENT_FORMAT_REMINDER[mode] ?? ''}\n\nCandidate's resume:\n${resumeText.trim()}`
+        : inputText.trim();
+    sendMessage({ text });
     setInputText('');
+  };
+
+  const clearResumeAttachment = () => {
+    setResumeText('');
+    setResumeFileName(null);
+    setUploadError(null);
   };
 
   const switchMode = (next: Mode) => {
     setMode(next);
     setMessages([]);
     setUploadError(null);
+    clearResumeAttachment();
+    hasNudgedRef.current = false;
     clearError();
   };
 
   const clearChat = () => {
     setMessages([]);
+    hasNudgedRef.current = false;
     clearError();
   };
 
@@ -159,9 +223,16 @@ export default function Home() {
     }
 
     const name = file.name.toLowerCase();
+    const isAttachment = RESUME_ATTACHMENT_MODES.includes(mode);
 
     if (name.endsWith('.txt')) {
-      setInputText(await file.text());
+      const text = await file.text();
+      if (isAttachment) {
+        setResumeText(text);
+        setResumeFileName(file.name);
+      } else {
+        setInputText(text);
+      }
       return;
     }
 
@@ -177,7 +248,12 @@ export default function Home() {
       const response = await fetch('/api/extract', { method: 'POST', body: formData });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to extract text from file');
-      setInputText(data.text);
+      if (isAttachment) {
+        setResumeText(data.text);
+        setResumeFileName(file.name);
+      } else {
+        setInputText(data.text);
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to extract text from file');
     } finally {
@@ -308,26 +384,47 @@ export default function Home() {
                       onChange={handleFileChange}
                       className="hidden"
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isExtracting || isLoading}
-                      className="w-full"
-                    >
-                      {isExtracting ? (
-                        <>
-                          <Loader2 className="size-3.5 animate-spin" />
-                          Reading file...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="size-3.5" />
-                          Upload resume (PDF/DOCX/TXT)
-                        </>
-                      )}
-                    </Button>
+                    {RESUME_ATTACHMENT_MODES.includes(mode) && resumeFileName ? (
+                      <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-2.5 py-2 text-xs">
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate">{resumeFileName}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {resumeText.length.toLocaleString()} chars
+                        </span>
+                        <button
+                          type="button"
+                          onClick={clearResumeAttachment}
+                          disabled={isLoading}
+                          title="Remove attached resume"
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isExtracting || isLoading}
+                        className="w-full"
+                      >
+                        {isExtracting ? (
+                          <>
+                            <Loader2 className="size-3.5 animate-spin" />
+                            Reading file...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="size-3.5" />
+                            {RESUME_ATTACHMENT_MODES.includes(mode)
+                              ? 'Attach resume (optional, PDF/DOCX/TXT)'
+                              : 'Upload resume (PDF/DOCX/TXT)'}
+                          </>
+                        )}
+                      </Button>
+                    )}
                     {uploadError && (
                       <p className="mt-1.5 text-xs text-destructive">{uploadError}</p>
                     )}

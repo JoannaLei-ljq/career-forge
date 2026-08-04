@@ -11,7 +11,7 @@ interview questions, and a live mock interview — all in one app, with
 responses streamed in real time and optionally tailored to a specific
 job description.
 
-**Live demo:** _add your Vercel URL here once deployed_
+**Live demo:** [career-forge-ochre.vercel.app](https://career-forge-ochre.vercel.app/)
 
 <!-- Add a screenshot or short GIF here once you have one, e.g.: -->
 <!-- ![Career Forge screenshot](./docs/screenshot.png) -->
@@ -101,8 +101,8 @@ environment variable settings (e.g. Vercel Project Settings) for deployment.
 
 ## License
 
-[MIT](./LICENSE) © Jingqiao (Joanna) Lei
+[MIT](./LICENSE) © Joanna
 
 ## Author
 
-Jingqiao (Joanna) Lei — _add LinkedIn_ · _add portfolio site_ · leijingq@usc.edu
+Joanna
