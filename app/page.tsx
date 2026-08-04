@@ -96,8 +96,15 @@ questions in this format and nothing else:
 3. [System Design] ...
 4. [Behavioral] ...
 5. [Open-Ended] ...`,
-  simulate:
-    'Use the resume below only as context for tailoring. Do not analyze it or output strengths/weaknesses/a score — respond with a single interview question to start the mock interview.',
+  simulate: `Use the resume below only as context for tailoring — do not analyze it, do not list
+strengths/weaknesses, and do not give a "Role Fit Score" or "Key Areas to Prepare" section.
+Your entire response must be ONE short interview question and nothing else, for example:
+
+"Walk me through a project where you used [a specific skill from the resume] — what was your
+role and what was the outcome?"
+
+Ask something in that style, tailored to the resume, then stop. Do not add any analysis,
+scoring, or commentary before or after the question.`,
 };
 
 export default function Home() {
