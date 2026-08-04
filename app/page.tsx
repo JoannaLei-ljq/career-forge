@@ -7,6 +7,8 @@ import remarkGfm from 'remark-gfm';
 import {
   AlertCircle,
   FileText,
+  Flag,
+  Flame,
   Loader2,
   Mic,
   Send,
@@ -14,6 +16,8 @@ import {
   Star,
   Target,
   Trash2,
+  Upload,
+  Users,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -38,25 +42,34 @@ const TOOLS: { id: Mode; label: string; desc: string; icon: typeof FileText }[] 
   { id: 'analyze', label: 'Resume Analysis', desc: 'Strengths & weaknesses', icon: FileText },
   { id: 'star', label: 'STAR Rewrite', desc: 'Rewrite experience', icon: Star },
   { id: 'predict', label: 'Question Prediction', desc: 'Role-specific questions', icon: Target },
-  { id: 'simulate', label: 'Mock Interview', desc: 'AI interviewer', icon: Mic },
+  { id: 'simulate', label: 'Mock Interview', desc: 'AI interviewer', icon: Users },
 ];
 
 const PLACEHOLDERS: Record<Mode, string> = {
-  analyze: 'Paste your full resume...',
-  star: 'Paste a work experience story...',
+  analyze: 'Paste your full resume, or upload a file below...',
+  star: 'Paste a work experience story, or upload a resume below...',
   predict: 'Enter target role, e.g. Frontend Engineer',
   simulate: 'Enter the role you want to mock interview for...',
 };
+
+// Uploading a resume file only makes sense where the input is resume/experience
+// text, not a one-line role title.
+const UPLOAD_MODES: Mode[] = ['analyze', 'star'];
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>('analyze');
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [jobDescription, setJobDescription] = useState('');
+  const [showJobDescription, setShowJobDescription] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: '/api/chat', body: { mode } }),
-    [mode]
+    () => new DefaultChatTransport({ api: '/api/chat', body: { mode, jobDescription } }),
+    [mode, jobDescription]
   );
 
   const { messages, sendMessage, status, error, setMessages, clearError } = useChat({
@@ -76,6 +89,7 @@ export default function Home() {
   const switchMode = (next: Mode) => {
     setMode(next);
     setMessages([]);
+    setUploadError(null);
     clearError();
   };
 
@@ -132,18 +146,65 @@ export default function Home() {
     recognition.start();
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+
+    setUploadError(null);
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File is too large (max 5MB).');
+      return;
+    }
+
+    const name = file.name.toLowerCase();
+
+    if (name.endsWith('.txt')) {
+      setInputText(await file.text());
+      return;
+    }
+
+    if (!name.endsWith('.pdf') && !name.endsWith('.docx')) {
+      setUploadError('Unsupported file type. Please upload a PDF, DOCX, or TXT file.');
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/extract', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to extract text from file');
+      setInputText(data.text);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Failed to extract text from file');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="mx-auto max-w-5xl px-4 py-10 text-center">
-          <Badge variant="secondary" className="mb-3">
-            <Sparkles className="size-3" />
-            AI-powered
-          </Badge>
-          <h1 className="text-3xl font-bold tracking-tight">Interview Toolkit</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Resume feedback, STAR rewrites, predicted questions, and mock interviews — powered by AI.
+      <div className="h-1 bg-gradient-to-r from-primary via-primary/60 to-primary" />
+
+      <header className="relative overflow-hidden border-b bg-gradient-to-b from-primary/[0.06] to-background">
+        <div className="mx-auto max-w-5xl px-4 py-14 text-center">
+          <div className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            <Flame className="size-6" />
+          </div>
+          <h1 className="font-heading text-3xl font-bold tracking-tight sm:text-4xl">
+            Career Forge
+          </h1>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
+            Resume feedback, STAR rewrites, predicted questions, and mock interviews — powered by
+            AI, tailored to the job you want.
           </p>
+          <Badge variant="secondary" className="mt-5">
+            <Sparkles className="size-3" />
+            Streamed AI responses
+          </Badge>
         </div>
       </header>
 
@@ -153,18 +214,16 @@ export default function Home() {
           onValueChange={(value) => switchMode(value as Mode)}
           className="mb-6"
         >
-          <TabsList className="grid h-auto grid-cols-2 gap-1 bg-muted p-1 sm:flex sm:w-fit sm:flex-wrap">
+          <TabsList className="flex h-auto w-full flex-wrap gap-1 bg-muted p-1 sm:w-fit">
             {TOOLS.map((tool) => (
               <TabsTrigger
                 key={tool.id}
                 value={tool.id}
-                className="h-auto flex-col items-start gap-0 px-3 py-2 text-left"
+                title={tool.desc}
+                className="font-heading gap-1.5 px-3 py-1.5 font-medium"
               >
-                <span className="flex items-center gap-1.5 font-medium">
-                  <tool.icon className="size-4" />
-                  {tool.label}
-                </span>
-                <span className="text-xs font-normal text-muted-foreground">{tool.desc}</span>
+                <tool.icon className="size-4" />
+                {tool.label}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -178,22 +237,41 @@ export default function Home() {
         )}
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card>
+          <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="font-heading flex items-center gap-2 text-base">
                 <activeTool.icon className="size-4 text-primary" />
                 {activeTool.label} — Input
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-3">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowJobDescription((v) => !v)}
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    {showJobDescription ? 'Hide job description' : '+ Add job description (optional)'}
+                  </button>
+                  {showJobDescription && (
+                    <Textarea
+                      value={jobDescription}
+                      onChange={(e) => setJobDescription(e.target.value)}
+                      placeholder="Paste the job description to tailor feedback to this specific role..."
+                      rows={4}
+                      className="mt-2 max-h-[200px] overflow-y-auto text-sm"
+                      disabled={isLoading}
+                    />
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Textarea
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     placeholder={PLACEHOLDERS[mode]}
                     rows={12}
-                    className="min-h-[280px] font-mono text-sm"
+                    className="min-h-[280px] max-h-[500px] overflow-y-auto font-mono text-sm"
                     disabled={isLoading}
                   />
                   <Button
@@ -221,6 +299,53 @@ export default function Home() {
                     </>
                   )}
                 </Button>
+                {UPLOAD_MODES.includes(mode) && (
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.txt"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isExtracting || isLoading}
+                      className="w-full"
+                    >
+                      {isExtracting ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Reading file...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="size-3.5" />
+                          Upload resume (PDF/DOCX/TXT)
+                        </>
+                      )}
+                    </Button>
+                    {uploadError && (
+                      <p className="mt-1.5 text-xs text-destructive">{uploadError}</p>
+                    )}
+                  </div>
+                )}
+                {mode === 'simulate' && messages.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => sendMessage({ text: 'Please end the interview now and give me my scorecard.' })}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    <Flag className="size-3.5" />
+                    End interview & get scorecard
+                  </Button>
+                )}
                 {messages.length > 0 && (
                   <Button
                     type="button"
@@ -237,9 +362,9 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="flex flex-col">
+          <Card className="flex flex-col shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="font-heading flex items-center gap-2 text-base">
                 <span
                   className={`size-2 rounded-full ${
                     isLoading ? 'animate-pulse bg-yellow-500' : 'bg-green-500'
@@ -301,6 +426,20 @@ export default function Home() {
           </Card>
         </div>
       </div>
+
+      <footer className="border-t">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-1 px-4 py-6 text-center text-xs text-muted-foreground sm:flex-row sm:justify-between">
+          <p>Built by Joanna</p>
+          <a
+            href="https://github.com/JoannaLei-ljq/career-forge"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            View source on GitHub
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }
