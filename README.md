@@ -52,6 +52,3 @@ API, and render as formatted Markdown.
 - `app/api/chat/route.ts` — API route that streams a mode-specific system prompt + user
   input through OpenRouter
 - `components/ui/` — shadcn primitives (Button, Card, Tabs, Textarea, etc.)
-
-See [`UPGRADE_PLAN.md`](./UPGRADE_PLAN.md) for the project roadmap and what's implemented
-so far.
